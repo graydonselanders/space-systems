@@ -1,0 +1,217 @@
+Code (the math):
+
+% ENGPHYS 3SP3 Assignment 8 - Graydon Selanders
+%% Question 1 - Calculate the 6 orbital elements
+disp('---------- Question 1: ----------')
+r_i = [-15317.2, -9756.33, -3152.07];
+v_i = [2.3517, -3.1006, -2.08055];
+mu = 398600.4418;
+
+r_i_mag = sqrt(dot(r_i, r_i));
+v_i_mag = sqrt(dot(v_i, v_i));
+
+v_rad_i = dot(r_i./r_i_mag, v_i);
+
+% A) 
+h = cross(r_i, v_i); h_z = h(3);
+disp('Angular momentum - h: ')
+disp(h)
+h_mag = sqrt(dot(h, h));
+
+% B)
+inc = acos(h_z/h_mag);
+disp('Inclination - i: ')
+disp(180*inc/pi)
+
+% C) 
+N = cross([0,0,1], h); N_x = N(1);
+N_mag = sqrt(dot(N, N));
+
+RAAN = acos(N_x/N_mag);
+disp('Right ascension of ascending node (RAAN): ')
+fprintf(['We know that since Ny > 0, RAAN is in the first quadrant, ' ...
+    'so the RAAN is %.3d degrees.\n\n'], 180*RAAN/pi)
+
+% D)
+e_vec = (1/mu) * ((v_i_mag^2 - (mu/r_i_mag)).*r_i - r_i_mag*v_rad_i.*v_i);
+e = sqrt(dot(e_vec, e_vec));
+disp('Eccentricity - e: ')
+disp(e)
+
+% E)
+omega = acos(dot(N, e_vec)/(N_mag*e));
+disp('Argument of Perigee - Omega:')
+disp(180*omega/pi) 
+% Because N dot e_vec > 0, and e_z > 0, we know that omega is in the first
+% quadrant
+
+% F)
+theta = acos(dot(e_vec, r_i)/(e*r_i_mag));
+disp('True Anomaly - Theta: ')
+disp(180*theta/pi) 
+% Because e_vec dot r_i < 0, and r_i dot v_i > 0, we know that theta is in
+% the second quadrant
+
+%% Question 2 - Position of CN Tower in ECEF reference frame
+disp('---------- Question 2: ----------')
+lat = 43.6425637; 
+long = -79.38708718320467;
+h = 84; % Elevation in m from https://www.maps.ie/coordinates.html
+eq = 6378137; % Equatorial radius (m)
+pm = 6356752.3; % Prime meridian radius (m)
+f = (eq-pm)/eq; % flattening
+e = sqrt(f*(2 - f));
+
+r_lat = eq / sqrt(1 - e^2 * sind(lat)^2);
+rho = (r_lat + h) * cosd(lat);
+
+x = rho .* cosd(long);
+y = rho .* sind(long);
+z = (r_lat * (1 - e^2) + h) * sind(lat); % would've missed the e^2 if it weren't for byron what a legend
+disp('x, y, and z coordinates in ECEF reference frame (m):')
+disp(x)
+disp(y)
+disp(z)
+rECEF = [x; y; z];
+
+%% Question 3 - Julian date for November 5th, 2025 at 17:30 UT
+disp('---------- Question 3 ----------')
+Y = 2025; % year
+M = 11; % month
+D = 5; % day
+H = 17.5; % hour of the day
+
+J = 367 * Y - floor(7*((Y + floor((M + 9) / 12)) / 4)) + floor((275 * M / 9)) + ...
+    D + 1721013.5 + H/24; % floors added to force integer steps for years & months
+fprintf('Julian Date: %.6d \n\n', J)
+
+%% Question 4 - CN Tower coordinates in ECI on Nov 5th, 2025 at 17:30
+disp('---------- Question 4 ----------')
+% use variables from Q2&3
+TU  = J - 2451545.0;
+ERA = 2*pi*(0.7790572732640 + 1.0027381191135448*TU); 
+
+Rz  = [cos(-ERA)  sin(-ERA) 0; 
+      -sin(-ERA)  cos(-ERA) 0;
+       0          0         1];
+
+rECI = Rz * rECEF;   % ECI coordinates (m)
+disp(rECI)
+
+% if these are the same then I didn't mess up my math
+norm(rECEF);
+norm(rECI);
+
+% I didn't take into account precession or nutation. if the earth's axis
+% precesses ~1.4 degress per centry, and nutates ~0.0025 per 18.6 years,
+% relative to J2000, the axes on Nov 5th at 17:30 would have rotated by
+% somewhere around 0.36 degrees, which would rotate the CN tower's
+% equatorial components ~30km, +/- ~200m in nutation variation. If I was
+% supposed to transform to J2000, I'd have needed a precession-nutation
+% matrix that wasn't in the slides, and I wasn't certain where to look for
+% one. I decided just to look at the 'ECI-of-date' coordinates. 
+
+%% Question 5 - Determine launch characteristics of a satellite
+disp('---------- Question 5 ----------')
+inc = 63.4; 
+RAAN = 270;
+v = 7790; % m/s
+lat = 62.925556;
+long = 40.577778;
+h = 91;
+
+% For some required inclination the launch window exists only if the launch
+% pad latitude is less than or equal to the inclination (for direct, 180 -
+% the inclination for indirect). This condition does hold in our case:
+if inc - lat > 0
+    fprintf("The difference between the inclination and the latitude is positive, \n" + ...
+        "so we can launch without an orbital plane change. Difference: %.3d \n", inc-lat);
+end
+
+% ECI azimuth
+A = asind(cosd(inc)/cosd(lat));
+fprintf("ECI Azimuth, NE launch (Ascending Node): %0.4d \n" + ...
+        "ECI Azimuth, SE launch (Descending Node): %0.4d \n", A, 180-A);
+
+% ENU azimuth
+v_eq = 460; % velocity at equator in m/s
+v_add = v_eq*cosd(lat); % velocity at launch pad latitude
+
+v_e_i = v*sind(A); 
+v_e_rel = v_e_i - v_add;
+% For ascending node:
+v_n_i_an = v*cosd(A);
+A_ENU_an = atand(v_e_rel/v_n_i_an);
+fprintf("ENU Azimuth for ascending node: %.4d \n", A_ENU_an)
+% for descending node
+v_n_i_dn = v*cosd(180-A);
+A_ENU_dn = atand(v_e_rel/v_n_i_dn)+180;
+fprintf("ENU Azimuth for descending node: %.4d \n", A_ENU_dn)
+
+% Launch window in hours
+del_lambda = acosd(cosd(A)/sind(inc));
+% for ascending node
+lambda_lp_an = RAAN + del_lambda;
+an_time = lambda_lp_an/15;
+fprintf("AN window: %.4d \n", an_time)
+% for descending node
+lambda_lp_dn = RAAN + 180 - del_lambda;
+dn_time = lambda_lp_dn/15;
+fprintf("DN window: %.4d \n", dn_time)
+
+% So the AN window is at 23.28hrs, and the DN window is at 24.77 hrs, and
+% since we are at noon (12hrs), the closest time to launch is at the
+% ascending node at 23.28hrs or ~11:17pm.
+
+
+
+Answers from code:
+
+---------- Question 1: ----------
+Angular momentum - h: 
+   1.0e+04 *
+
+    1.0525   -3.9281    7.0436
+
+Inclination - i: 
+   30.0000
+
+Right ascension of ascending node (RAAN): 
+We know that since Ny > 0, RAAN is in the first quadrant, so the RAAN is 1.500e+01 degrees.
+
+Eccentricity - e: 
+    0.1000
+
+Argument of Perigee - Omega:
+   24.9984
+
+True Anomaly - Theta: 
+  175.0017
+
+---------- Question 2: ----------
+x, y, and z coordinates in ECEF reference frame (m):
+   8.5144e+05
+
+  -4.5440e+06
+
+   4.3795e+06
+
+---------- Question 3 ----------
+Julian Date: 2.460985e+06 
+
+---------- Question 4 ----------
+   1.0e+06 *
+
+   -3.0316
+   -3.4903
+    4.3795
+
+---------- Question 5 ----------
+The difference between the inclination and the latitude is positive, 
+so we can launch without an orbital plane change. Difference: 4.744e-01 
+ECI Azimuth, NE launch (Ascending Node): 7.9662e+01 
+ECI Azimuth, SE launch (Descending Node): 1.0034e+02 
+ENU Azimuth for ascending node: 7.9378e+01 
+ENU Azimuth for descending node: 1.0062e+02 
+AN window: 2.3228e+01 
+DN window: 2.4772e+01
